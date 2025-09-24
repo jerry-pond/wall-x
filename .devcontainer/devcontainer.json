@@ -1,0 +1,34 @@
+{
+  "name": "WALL-X Development",
+  "dockerFile": "../Dockerfile.codespaces",
+  
+  "runArgs": [
+    "--gpus=all",
+    "--shm-size=16g",
+    "--ipc=host"
+  ],
+  
+  "mounts": [
+    "source=${localWorkspaceFolder}/workspace,target=/workspace/wall-x/workspace,type=bind",
+    "source=${localWorkspaceFolder}/data,target=/workspace/wall-x/data,type=bind",
+    "source=${localWorkspaceFolder}/checkpoints,target=/workspace/wall-x/checkpoints,type=bind"
+  ],
+  
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/conda/envs/wallx/bin/python",
+        "python.terminal.activateEnvironment": true
+      }
+    }
+  },
+  
+  "postCreateCommand": "source /opt/conda/bin/activate wallx && echo 'Environment ready!'",
+  
+  "remoteUser": "root"
+}

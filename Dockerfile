@@ -1,6 +1,6 @@
 # WALL-X NVIDIA Docker Environment
 # Base: NVIDIA CUDA 12.4 + cuDNN 9 + Ubuntu 22.04
-FROM nvidia/cuda:12.4.1-cudnn9-devel-ubuntu22.04
+FROM nvcr.io/nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
 # Environment setup
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -31,10 +31,10 @@ RUN apt-get update && apt-get install -y \
     ninja-build \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Miniconda
-RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh && \
-    bash /tmp/miniconda.sh -b -p /opt/conda && \
-    rm /tmp/miniconda.sh && \
+# Install Miniforge (no TOS issues)
+RUN wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O /tmp/miniforge.sh && \
+    bash /tmp/miniforge.sh -b -p /opt/conda && \
+    rm /tmp/miniforge.sh && \
     /opt/conda/bin/conda init bash
 
 # Create conda environment

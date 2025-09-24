@@ -42,7 +42,6 @@ env/
 # Data and checkpoints (mount as volumes)
 data/
 checkpoints/
-workspace/
 
 # Docker
 Dockerfile

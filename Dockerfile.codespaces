@@ -1,0 +1,91 @@
+# WALL-X for GitHub Codespaces - Optimized for Limited Disk Space
+# Multi-stage build to minimize disk usage
+FROM nvcr.io/nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    CUDA_HOME=/usr/local/cuda \
+    PATH=/opt/conda/bin:$CUDA_HOME/bin:$PATH \
+    LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH \
+    TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9" \
+    MAX_JOBS=2 \
+    TMPDIR=/tmp
+
+# Install minimal build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git wget build-essential ninja-build \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Miniforge
+RUN wget -q https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O /tmp/miniforge.sh && \
+    bash /tmp/miniforge.sh -b -p /opt/conda && \
+    rm /tmp/miniforge.sh && \
+    /opt/conda/bin/conda clean -a -y
+
+# Create conda environment and install base packages
+RUN /opt/conda/bin/conda create -n wallx python=3.10 -y && \
+    /opt/conda/bin/conda clean -a -y
+
+WORKDIR /workspace/build
+
+# Copy only necessary files for dependency installation
+COPY requirements.txt .
+
+# Install Python dependencies with aggressive cleanup
+SHELL ["/bin/bash", "-c"]
+RUN source /opt/conda/bin/activate wallx && \
+    pip install --no-cache-dir -r requirements.txt && \
+    rm -rf /tmp/* /root/.cache/pip/*
+
+# Install flash-attn with minimal jobs and immediate cleanup
+RUN source /opt/conda/bin/activate wallx && \
+    MAX_JOBS=2 pip install flash-attn==2.7.4.post1 --no-build-isolation && \
+    rm -rf /tmp/* /root/.cache/pip/* ~/.cache/*
+
+# Install LeRobot
+RUN source /opt/conda/bin/activate wallx && \
+    git clone --depth 1 https://github.com/huggingface/lerobot.git /tmp/lerobot && \
+    cd /tmp/lerobot && \
+    pip install --no-cache-dir -e . && \
+    cd / && rm -rf /tmp/lerobot /root/.cache/pip/*
+
+# Copy and build Wall-X CUDA extensions
+COPY setup.py pyproject.toml ./
+COPY csrc ./csrc
+COPY 3rdparty ./3rdparty
+COPY wall_x ./wall_x
+
+RUN source /opt/conda/bin/activate wallx && \
+    git submodule update --init --recursive && \
+    MAX_JOBS=2 pip install --no-build-isolation --no-cache-dir . && \
+    rm -rf /tmp/* /root/.cache/pip/* ~/.cache/* build/
+
+# --- Final Stage ---
+FROM nvcr.io/nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    CUDA_HOME=/usr/local/cuda \
+    PATH=/opt/conda/bin:$CUDA_HOME/bin:$PATH \
+    LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy conda environment from builder
+COPY --from=builder /opt/conda /opt/conda
+
+# Set working directory
+WORKDIR /workspace/wall-x
+
+# Copy scripts and workspace
+COPY scripts ./scripts
+COPY workspace ./workspace
+
+RUN echo "source activate wallx" >> ~/.bashrc
+
+EXPOSE 8888 6006
+
+CMD ["/bin/bash", "-c", "source /opt/conda/bin/activate wallx && /bin/bash"]
